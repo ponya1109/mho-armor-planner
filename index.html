@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#18221d">
+<title>MHO ARMOR PLANNER</title>
+<style>
+:root{color-scheme:dark;--bg:#101713;--panel:#1c2821;--line:#35463a;--gold:#e6c65b;--muted:#aebbb1;--text:#f3f5ef}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#17251d,#0d1210 65%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif}
+main{max-width:760px;margin:auto;padding:22px 16px 48px}.brand{font-size:12px;letter-spacing:.2em;color:var(--gold)}
+h1{font-size:25px;margin:6px 0 4px}.sub{color:var(--muted);font-size:13px;margin:0 0 22px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}
+.panel h2{font-size:16px;margin:0 0 14px}.fieldgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
+select{width:100%;background:#101813;color:var(--text);border:1px solid #526457;border-radius:10px;padding:12px;font-size:16px}
+select:focus{outline:2px solid var(--gold)}.summary{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.pill{font-size:11px;color:#192018;background:var(--gold);padding:5px 9px;border-radius:99px;font-weight:700;white-space:nowrap}
+.muted{color:var(--muted);font-size:12px;line-height:1.6}.materials{width:100%;border-collapse:collapse}
+.materials td{padding:11px 4px;border-bottom:1px solid var(--line);font-size:14px}
+.materials td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}.materials tr:last-child td{border:0}
+.skill{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.skill:last-child{border:0}
+.empty{color:var(--muted);font-size:13px;padding:8px 0}.notice{background:#2c2b1d;border:1px solid #64572b;border-radius:10px;padding:11px;color:#e9dfb4;font-size:12px;line-height:1.6}
+.notice.warn{background:#30251c;border-color:#73502d;color:#f2d5a8}.footer{font-size:11px;color:#87958a;line-height:1.7;margin-top:20px}
+a{color:#e6c65b;text-decoration:underline}button{border:0;background:var(--gold);color:#172018;font-weight:700;border-radius:10px;padding:12px 16px;font-size:14px;width:100%;margin-top:12px}
+@media(max-width:420px){main{padding:18px 13px 36px}.panel{padding:14px}.fieldgrid{gap:9px}}
+</style>
+</head>
+<body><main>
+<div class="brand">MONSTER HUNTER OUTLANDERS</div>
+<h1>MHO ARMOR PLANNER</h1>
+<p class="sub">防具一覧・強化素材確認ツール（全防具カタログ拡張版）</p>
+
+<section class="panel">
+  <div class="summary"><h2>防具を選択</h2><span class="pill" id="registered">登録済みデータ 10件</span></div>
+  <div class="field"><label for="armor">防具名</label><select id="armor"></select></div>
+  <p class="muted" id="armorMeta" style="margin:10px 0 0"></p>
+</section>
+
+<section class="panel">
+  <h2>冒険ランク</h2>
+  <div class="field">
+    <label for="adventureRank">あなたの冒険ランク</label>
+    <select id="adventureRank"></select>
+  </div>
+  <p class="muted" id="rankCapText"></p>
+</section>
+
+<section class="panel">
+  <h2>強化レアリティ</h2>
+  <div class="fieldgrid">
+    <div class="field"><label for="current">現在のレアリティ</label><select id="current"></select></div>
+    <div class="field"><label for="target">目標レアリティ</label><select id="target"></select></div>
+  </div>
+  <p class="muted" id="capNote"></p>
+</section>
+
+<section class="panel">
+  <div class="summary"><h2>必要素材</h2><span class="pill" id="stepCount">—</span></div>
+  <table class="materials"><tbody id="materials"></tbody></table>
+  <p class="muted" id="materialNote"></p>
+</section>
+
+<section class="panel">
+  <h2>目標レアリティで発動するスキル</h2>
+  <div id="skills"></div>
+  <p class="muted">※GameWithに記載されたスキル解放段階を反映。未掲載の段階は推測で補完していません。</p>
+</section>
+
+<div class="notice warn" id="dataNotice"></div>
+<p class="footer">
+  防具一覧：GameWithの防具一覧ページを参照。カタログのみ登録された防具は素材計算できません。部位名は一部ゲーム内確認待ちです。<br>
+  素材データ出典：GameWith各防具ページ。素材名・必要個数を参考に独自形式で整理しています。<br>
+  防具ごとに掲載状況が異なり、一部ページではR8以降の強化素材が未掲載です。未確認の段階を含む計算は表示しません。<br>
+  <span id="sourceLink"></span><br>
+  R12解放を冒険ランク52、R13解放を54とする設定は、ユーザー提供のゲーム内情報に基づく暫定値です。GameWith掲載表で確認できるのはR11までです。
+</p>
+</main>
+<script>
+const common = {
+  r4: {'狩魂玉Ⅰ':1},
+  r5: {'狩魂玉Ⅱ':1},
+  r6: {'狩魂玉Ⅱ':1},
+  r7: {'狩魂玉Ⅲ':2},
+  r8: {'狩魂玉Ⅲ':2},
+  r9: {'狩魂玉Ⅳ':2},
+  r10:{'狩魂玉Ⅳ':2},
+  r11:{'狩魂玉Ⅴ':4},
+  r12:{'狩魂玉Ⅴ':4}
+};
+const armorData = {
+  alloyHead:{
+    name:'アロイヘルム',slot:'頭',series:'アロイ',url:'https://gamewith.jp/mhoutlanders/584189',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'大地の結晶':1},5:{'狩魂玉Ⅱ':1,'大地の結晶':2},
+      6:{'狩魂玉Ⅱ':1,'大地の結晶':2},7:{'狩魂玉Ⅲ':2,'大地の結晶':3},
+      8:{'狩魂玉Ⅲ':2,'大地の結晶':3},9:{'狩魂玉Ⅳ':2,'大地の結晶':3},
+      10:{'狩魂玉Ⅳ':2,'大地の結晶':3},11:{'狩魂玉Ⅴ':4,'大地の結晶':4},
+      12:{'狩魂玉Ⅴ':4,'大地の結晶':4}},
+    skills:{3:{'水耐性強化':1},6:{'防御反撃':1},8:{'破壊王':1},10:{'防御反撃':2}},
+    skillBase:3
+  },
+  alloyBody:{
+    name:'アロイメイル',slot:'胴',series:'アロイ',url:'https://gamewith.jp/mhoutlanders/584188',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'マカライト鉱石':1,'大地の結晶':1},
+      5:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'大地の結晶':2},
+      6:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'大地の結晶':2},
+      7:{'狩魂玉Ⅲ':2,'マカライト鉱石':3,'大地の結晶':3}},
+    skills:{3:{'剛勢':1},6:{'破壊王':1}},skillBase:3
+  },
+  alloyArms:{
+    name:'アロイアーム',slot:'腕',series:'アロイ',url:'https://gamewith.jp/mhoutlanders/584187',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'大地の結晶':1},5:{'狩魂玉Ⅱ':1,'大地の結晶':2},
+      6:{'狩魂玉Ⅱ':1,'大地の結晶':2},7:{'狩魂玉Ⅲ':2,'大地の結晶':3},
+      9:{'狩魂玉Ⅳ':2,'大地の結晶':3}},
+    skills:{3:{'風圧耐性':1},6:{'防護':1}},skillBase:3
+  },
+  alloyWaist:{
+    name:'アロイコイル',slot:'腰',series:'アロイ',url:'https://gamewith.jp/mhoutlanders/584186',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'マカライト鉱石':1,'鉄鉱石':1},
+      5:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'鉄鉱石':2},
+      6:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'鉄鉱石':2},
+      7:{'狩魂玉Ⅲ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      8:{'狩魂玉Ⅲ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      9:{'狩魂玉Ⅳ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      10:{'狩魂玉Ⅳ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      11:{'狩魂玉Ⅴ':4,'マカライト鉱石':4,'鉄鉱石':4},
+      12:{'狩魂玉Ⅴ':4,'マカライト鉱石':4,'鉄鉱石':4}},
+    skills:{3:{'風圧耐性':1},6:{'剛勢':1},8:{'水耐性強化':1}},skillBase:3
+  },
+  alloyLegs:{
+    name:'アロイグリーヴ',slot:'脚',series:'アロイ',url:'https://gamewith.jp/mhoutlanders/584185',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'マカライト鉱石':1,'鉄鉱石':1},
+      5:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'鉄鉱石':2},
+      6:{'狩魂玉Ⅱ':1,'マカライト鉱石':2,'鉄鉱石':2},
+      7:{'狩魂玉Ⅲ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      8:{'狩魂玉Ⅲ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      9:{'狩魂玉Ⅳ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      10:{'狩魂玉Ⅳ':2,'マカライト鉱石':3,'鉄鉱石':3},
+      11:{'狩魂玉Ⅴ':4,'マカライト鉱石':4,'鉄鉱石':4},
+      12:{'狩魂玉Ⅴ':4,'マカライト鉱石':4,'鉄鉱石':4}},
+    skills:{3:{'防御反撃':1},6:{'防護':1},8:{'毒耐性':1}},skillBase:3
+  },
+
+  jagrasHead:{
+    name:'ジャグラスヘルム',slot:'頭',series:'ジャグラス',url:'https://gamewith.jp/mhoutlanders/584249',setSkill:'ドスジャグラスの抵抗（2部位：気絶耐性+1）',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'賊竜の鱗Ⅰ':1,'賊竜のたてがみⅠ':1},
+      5:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜のたてがみⅡ':2},
+      6:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜のたてがみⅡ':2},
+      7:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜のたてがみⅢ':3},
+      8:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜のたてがみⅢ':3},
+      9:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜のたてがみⅣ':3},
+      10:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜のたてがみⅣ':3},
+      11:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜のたてがみⅤ':4},
+      12:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜のたてがみⅤ':4}},
+    skills:{1:{'気絶耐性':1},5:{'弁当好き':1},7:{'怖いもの無し':1},9:{'弁当好き':2}},skillBase:1
+  },
+  jagrasBody:{
+    name:'ジャグラスメイル',slot:'胴',series:'ジャグラス',url:'https://gamewith.jp/mhoutlanders/584248',setSkill:'ドスジャグラスの抵抗（2部位：気絶耐性+1）',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'賊竜の鱗Ⅰ':1,'賊竜の皮Ⅰ':1},
+      5:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜の皮Ⅱ':2},
+      6:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜の皮Ⅱ':2},
+      7:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜の皮Ⅲ':3},
+      8:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜の皮Ⅲ':3},
+      9:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜の皮Ⅳ':3},
+      10:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜の皮Ⅳ':3},
+      11:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜の皮Ⅴ':4},
+      12:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜の皮Ⅴ':4}},
+    skills:{1:{'怖いもの無し':1},5:{'気絶耐性':1},7:{'威嚇':1}},skillBase:1
+  },
+  jagrasArms:{
+    name:'ジャグラスアーム',slot:'腕',series:'ジャグラス',url:'https://gamewith.jp/mhoutlanders/584247',setSkill:'ドスジャグラスの抵抗（2部位：気絶耐性+1）',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'賊竜の鱗Ⅰ':1,'賊竜の爪Ⅰ':1},
+      5:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜の爪Ⅱ':2},
+      6:{'狩魂玉Ⅱ':1,'賊竜の鱗Ⅱ':2,'賊竜の爪Ⅱ':2},
+      7:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜の爪Ⅲ':3},
+      8:{'狩魂玉Ⅲ':2,'賊竜の鱗Ⅲ':3,'賊竜の爪Ⅲ':3},
+      9:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜の爪Ⅳ':3},
+      10:{'狩魂玉Ⅳ':2,'賊竜の鱗Ⅳ':3,'賊竜の爪Ⅳ':3},
+      11:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜の爪Ⅴ':4},
+      12:{'狩魂玉Ⅴ':4,'賊竜の鱗Ⅴ':4,'賊竜の爪Ⅴ':4}},
+    skills:{1:{'練気をまといし刃':1},5:{'威嚇':1},7:{'練気をまといし刃':2},9:{'徹底追撃':1}},skillBase:1
+  },
+  jagrasWaist:{
+    name:'ジャグラスコイル',slot:'腰',series:'ジャグラス',url:'https://gamewith.jp/mhoutlanders/584246',setSkill:'ドスジャグラスの抵抗（2部位：気絶耐性+1）',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'賊竜の皮Ⅰ':1},
+      5:{'狩魂玉Ⅱ':1,'賊竜の皮Ⅱ':2},
+      6:{'狩魂玉Ⅱ':1,'賊竜の皮Ⅱ':2},
+      7:{'狩魂玉Ⅲ':2,'賊竜の皮Ⅲ':3},
+      8:{'狩魂玉Ⅲ':2,'賊竜の皮Ⅲ':3},
+      9:{'狩魂玉Ⅳ':2,'賊竜の皮Ⅳ':3},
+      10:{'狩魂玉Ⅳ':2,'賊竜の皮Ⅳ':3},
+      11:{'狩魂玉Ⅴ':4,'賊竜の皮Ⅴ':4},
+      12:{'狩魂玉Ⅴ':4,'賊竜の皮Ⅴ':4}},
+    skills:{1:{'抜刀一閃':1},5:{'節約術':1}},skillBase:1
+  },
+  jagrasLegs:{
+    name:'ジャグラスグリーヴ',slot:'脚',series:'ジャグラス',url:'https://gamewith.jp/mhoutlanders/584245',setSkill:'ドスジャグラスの抵抗（2部位：気絶耐性+1）',
+    materials:{
+      4:{'狩魂玉Ⅰ':1,'賊竜の皮Ⅰ':1},
+      5:{'狩魂玉Ⅱ':1,'賊竜の皮Ⅱ':2},
+      6:{'狩魂玉Ⅱ':1,'賊竜の皮Ⅱ':2},
+      7:{'狩魂玉Ⅲ':2,'賊竜の皮Ⅲ':3},
+      8:{'狩魂玉Ⅲ':2,'賊竜の皮Ⅲ':3},
+      9:{'狩魂玉Ⅳ':2,'賊竜の皮Ⅳ':3},
+      10:{'狩魂玉Ⅳ':2,'賊竜の皮Ⅳ':3},
+      11:{'狩魂玉Ⅴ':4,'賊竜の皮Ⅴ':4},
+      12:{'狩魂玉Ⅴ':4,'賊竜の皮Ⅴ':4}},
+    skills:{1:{'弁当好き':1},5:{'威嚇':1},7:{'逆境':1}},skillBase:1
+  }
+
+};
+
+// GameWith防具一覧カタログ：一覧情報のみ。素材・個別スキルは未登録のため計算に使用しません。
+const catalogArmor = [{"key":"catalog_頭_2","name":"クルルヘルム","slot":"頭","series":"クルル","rarity":1},{"key":"catalog_胴_2","name":"クルルメイル","slot":"胴","series":"クルル","rarity":1},{"key":"catalog_腕_2","name":"クルルアーム","slot":"腕","series":"クルル","rarity":1},{"key":"catalog_腰_2","name":"クルルコイル","slot":"腰","series":"クルル","rarity":1},{"key":"catalog_脚_2","name":"クルルグリーヴ","slot":"脚","series":"クルル","rarity":1},{"key":"catalog_頭_3","name":"プケプケヘルム","slot":"頭","series":"プケプケ","rarity":1},{"key":"catalog_胴_3","name":"プケプケメイル","slot":"胴","series":"プケプケ","rarity":1},{"key":"catalog_腕_3","name":"プケプケアーム","slot":"腕","series":"プケプケ","rarity":1},{"key":"catalog_腰_3","name":"プケプケコイル","slot":"腰","series":"プケプケ","rarity":1},{"key":"catalog_脚_3","name":"プケプケグリーヴ","slot":"脚","series":"プケプケ","rarity":1},{"key":"catalog_頭_4","name":"冒険団ヘルム","slot":"頭","series":"冒険団","rarity":1},{"key":"catalog_胴_4","name":"冒険団メイル","slot":"胴","series":"冒険団","rarity":1},{"key":"catalog_腕_4","name":"冒険団アーム","slot":"腕","series":"冒険団","rarity":1},{"key":"catalog_腰_4","name":"冒険団コイル","slot":"腰","series":"冒険団","rarity":1},{"key":"catalog_脚_4","name":"冒険団グリーヴ","slot":"脚","series":"冒険団","rarity":1},{"key":"catalog_頭_5","name":"チェーンヘッド","slot":"頭","series":"チェーン","rarity":1},{"key":"catalog_胴_5","name":"チェーンベスト","slot":"胴","series":"チェーン","rarity":1},{"key":"catalog_腕_5","name":"チェーングラブ","slot":"腕","series":"チェーン","rarity":1},{"key":"catalog_腰_5","name":"チェーンベルト","slot":"腰","series":"チェーン","rarity":1},{"key":"catalog_脚_5","name":"チェーンパンツ","slot":"脚","series":"チェーン","rarity":1},{"key":"catalog_頭_6","name":"レザーヘッド","slot":"頭","series":"レザー","rarity":1},{"key":"catalog_胴_6","name":"レザーベスト","slot":"胴","series":"レザー","rarity":1},{"key":"catalog_腕_6","name":"レザーグラブ","slot":"腕","series":"レザー","rarity":1},{"key":"catalog_腰_6","name":"レザーベルト","slot":"腰","series":"レザー","rarity":1},{"key":"catalog_脚_6","name":"レザーパンツ","slot":"脚","series":"レザー","rarity":1},{"key":"catalog_頭_7","name":"ボロスヘルム","slot":"頭","series":"ボロス","rarity":2},{"key":"catalog_胴_7","name":"ボロスメイル","slot":"胴","series":"ボロス","rarity":2},{"key":"catalog_腕_7","name":"ボロスアーム","slot":"腕","series":"ボロス","rarity":2},{"key":"catalog_腰_7","name":"ボロスコイル","slot":"腰","series":"ボロス","rarity":2},{"key":"catalog_脚_7","name":"ボロスグリーヴ","slot":"脚","series":"ボロス","rarity":2},{"key":"catalog_頭_8","name":"ジュラヘルム","slot":"頭","series":"ジュラ","rarity":2},{"key":"catalog_胴_8","name":"ジュラメイル","slot":"胴","series":"ジュラ","rarity":2},{"key":"catalog_腕_8","name":"ジュラアーム","slot":"腕","series":"ジュラ","rarity":2},{"key":"catalog_腰_8","name":"ジュラコイル","slot":"腰","series":"ジュラ","rarity":2},{"key":"catalog_脚_8","name":"ジュラグリーヴ","slot":"脚","series":"ジュラ","rarity":2},{"key":"catalog_頭_9","name":"ギルオスヘルム","slot":"頭","series":"ギルオス","rarity":2},{"key":"catalog_胴_9","name":"ギルオスメイル","slot":"胴","series":"ギルオス","rarity":2},{"key":"catalog_腕_9","name":"ギルオスアーム","slot":"腕","series":"ギルオス","rarity":2},{"key":"catalog_腰_9","name":"ギルオスコイル","slot":"腰","series":"ギルオス","rarity":2},{"key":"catalog_脚_9","name":"ギルオスグリーヴ","slot":"脚","series":"ギルオス","rarity":2},{"key":"catalog_頭_10","name":"ボーンヘルム","slot":"頭","series":"ボーン","rarity":2},{"key":"catalog_胴_10","name":"ボーンメイル","slot":"胴","series":"ボーン","rarity":2},{"key":"catalog_腕_10","name":"ボーンアーム","slot":"腕","series":"ボーン","rarity":2},{"key":"catalog_腰_10","name":"ボーンコイル","slot":"腰","series":"ボーン","rarity":2},{"key":"catalog_脚_10","name":"ボーングリーヴ","slot":"脚","series":"ボーン","rarity":2},{"key":"catalog_頭_11","name":"ランゴヘルム","slot":"頭","series":"ランゴ","rarity":2},{"key":"catalog_胴_11","name":"ランゴメイル","slot":"胴","series":"ランゴ","rarity":2},{"key":"catalog_腕_11","name":"ランゴアーム","slot":"腕","series":"ランゴ","rarity":2},{"key":"catalog_腰_11","name":"ランゴコイル","slot":"腰","series":"ランゴ","rarity":2},{"key":"catalog_脚_11","name":"ランゴグリーヴ","slot":"脚","series":"ランゴ","rarity":2},{"key":"catalog_頭_12","name":"冒険者ヘルム","slot":"頭","series":"冒険者","rarity":2},{"key":"catalog_胴_12","name":"冒険者メイル","slot":"胴","series":"冒険者","rarity":2},{"key":"catalog_腕_12","name":"冒険者アーム","slot":"腕","series":"冒険者","rarity":2},{"key":"catalog_腰_12","name":"冒険者コイル","slot":"腰","series":"冒険者","rarity":2},{"key":"catalog_脚_12","name":"冒険者グリーヴ","slot":"脚","series":"冒険者","rarity":2},{"key":"catalog_頭_14","name":"ジャナフヘルム","slot":"頭","series":"ジャナフ","rarity":3},{"key":"catalog_胴_14","name":"ジャナフメイル","slot":"胴","series":"ジャナフ","rarity":3},{"key":"catalog_腕_14","name":"ジャナフアーム","slot":"腕","series":"ジャナフ","rarity":3},{"key":"catalog_腰_14","name":"ジャナフコイル","slot":"腰","series":"ジャナフ","rarity":3},{"key":"catalog_脚_14","name":"ジャナフグリーヴ","slot":"脚","series":"ジャナフ","rarity":3},{"key":"catalog_頭_15","name":"融光種レイアヘルム","slot":"頭","series":"融光種レイア","rarity":3},{"key":"catalog_胴_15","name":"融光種レイアメイル","slot":"胴","series":"融光種レイア","rarity":3},{"key":"catalog_腕_15","name":"融光種レイアアーム","slot":"腕","series":"融光種レイア","rarity":3},{"key":"catalog_腰_15","name":"融光種レイアコイル","slot":"腰","series":"融光種レイア","rarity":3},{"key":"catalog_脚_15","name":"融光種レイアグリーヴ","slot":"脚","series":"融光種レイア","rarity":3},{"key":"catalog_頭_16","name":"タロスヘルム","slot":"頭","series":"タロス","rarity":4},{"key":"catalog_胴_16","name":"タロスメイル","slot":"胴","series":"タロス","rarity":4},{"key":"catalog_腕_16","name":"タロスアーム","slot":"腕","series":"タロス","rarity":4},{"key":"catalog_腰_16","name":"タロスコイル","slot":"腰","series":"タロス","rarity":4},{"key":"catalog_脚_16","name":"タロスグリーヴ","slot":"脚","series":"タロス","rarity":4},{"key":"catalog_頭_17","name":"融光種ジャグラスヘルム","slot":"頭","series":"融光種ジャグラス","rarity":4},{"key":"catalog_胴_17","name":"融光種ジャグラスメイル","slot":"胴","series":"融光種ジャグラス","rarity":4},{"key":"catalog_腕_17","name":"融光種ジャグラスアーム","slot":"腕","series":"融光種ジャグラス","rarity":4},{"key":"catalog_腰_17","name":"融光種ジャグラスコイル","slot":"腰","series":"融光種ジャグラス","rarity":4},{"key":"catalog_脚_17","name":"融光種ジャグラスグリーヴ","slot":"脚","series":"融光種ジャグラス","rarity":4},{"key":"catalog_頭_18","name":"融光種プケプケヘルム","slot":"頭","series":"融光種プケプケ","rarity":4},{"key":"catalog_胴_18","name":"融光種プケプケメイル","slot":"胴","series":"融光種プケプケ","rarity":4},{"key":"catalog_腕_18","name":"融光種プケプケアーム","slot":"腕","series":"融光種プケプケ","rarity":4},{"key":"catalog_腰_18","name":"融光種プケプケコイル","slot":"腰","series":"融光種プケプケ","rarity":4},{"key":"catalog_脚_18","name":"融光種プケプケグリーヴ","slot":"脚","series":"融光種プケプケ","rarity":4},{"key":"catalog_頭_19","name":"パピメルテスタ","slot":"頭","series":"パピメル","rarity":4},{"key":"catalog_胴_19","name":"パピメルペット","slot":"胴","series":"パピメル","rarity":4},{"key":"catalog_腕_19","name":"パピメルマーノ","slot":"腕","series":"パピメル","rarity":4},{"key":"catalog_腰_19","name":"パピメルアンカ","slot":"腰","series":"パピメル","rarity":4},{"key":"catalog_脚_19","name":"パピメルグリーヴ","slot":"脚","series":"パピメル","rarity":4},{"key":"catalog_頭_20","name":"オウビートテスタ","slot":"頭","series":"オウビート","rarity":4},{"key":"catalog_胴_20","name":"オウビートペット","slot":"胴","series":"オウビート","rarity":4},{"key":"catalog_腕_20","name":"オウビートマーノ","slot":"腕","series":"オウビート","rarity":4},{"key":"catalog_腰_20","name":"オウビートアンカ","slot":"腰","series":"オウビート","rarity":4},{"key":"catalog_脚_20","name":"オウビートグリーヴ","slot":"脚","series":"オウビート","rarity":4},{"key":"catalog_頭_21","name":"ハイメタヘルム","slot":"頭","series":"ハイメタ","rarity":4},{"key":"catalog_胴_21","name":"ハイメタメイル","slot":"胴","series":"ハイメタ","rarity":4},{"key":"catalog_腕_21","name":"ハイメタアーム","slot":"腕","series":"ハイメタ","rarity":4},{"key":"catalog_腰_21","name":"ハイメタコイル","slot":"腰","series":"ハイメタ","rarity":4},{"key":"catalog_脚_21","name":"ハイメタグリーヴ","slot":"脚","series":"ハイメタ","rarity":4},{"key":"catalog_頭_22","name":"カガチヘルム","slot":"頭","series":"カガチ","rarity":5},{"key":"catalog_胴_22","name":"カガチメイル","slot":"胴","series":"カガチ","rarity":5},{"key":"catalog_腕_22","name":"カガチアーム","slot":"腕","series":"カガチ","rarity":5},{"key":"catalog_腰_22","name":"カガチコイル","slot":"腰","series":"カガチ","rarity":5},{"key":"catalog_脚_22","name":"カガチグリーヴ","slot":"脚","series":"カガチ","rarity":5},{"key":"catalog_頭_23","name":"融光種ジャナフヘルム","slot":"頭","series":"融光種ジャナフ","rarity":5},{"key":"catalog_胴_23","name":"融光種ジャナフメイル","slot":"胴","series":"融光種ジャナフ","rarity":5},{"key":"catalog_腕_23","name":"融光種ジャナフアーム","slot":"腕","series":"融光種ジャナフ","rarity":5},{"key":"catalog_腰_23","name":"融光種ジャナフコイル","slot":"腰","series":"融光種ジャナフ","rarity":5},{"key":"catalog_脚_23","name":"融光種ジャナフグリーヴ","slot":"脚","series":"融光種ジャナフ","rarity":5},{"key":"catalog_頭_24","name":"インゴットヘルム","slot":"頭","series":"インゴット","rarity":5},{"key":"catalog_胴_24","name":"インゴットメイル","slot":"胴","series":"インゴット","rarity":5},{"key":"catalog_腕_24","name":"インゴットアーム","slot":"腕","series":"インゴット","rarity":5},{"key":"catalog_腰_24","name":"インゴットコイル","slot":"腰","series":"インゴット","rarity":5},{"key":"catalog_脚_24","name":"インゴットグリーヴ","slot":"脚","series":"インゴット","rarity":5},{"key":"catalog_頭_25","name":"融光種クルルヘルム","slot":"頭","series":"融光種クルル","rarity":5},{"key":"catalog_胴_25","name":"融光種クルルメイル","slot":"胴","series":"融光種クルル","rarity":5},{"key":"catalog_腕_25","name":"融光種クルルアーム","slot":"腕","series":"融光種クルル","rarity":5},{"key":"catalog_腰_25","name":"融光種クルルコイル","slot":"腰","series":"融光種クルル","rarity":5},{"key":"catalog_脚_25","name":"融光種クルルグリーヴ","slot":"脚","series":"融光種クルル","rarity":5},{"key":"catalog_頭_26","name":"融光種ボロスヘルム","slot":"頭","series":"融光種ボロス","rarity":5},{"key":"catalog_胴_26","name":"融光種ボロスメイル","slot":"胴","series":"融光種ボロス","rarity":5},{"key":"catalog_腕_26","name":"融光種ボロスアーム","slot":"腕","series":"融光種ボロス","rarity":5},{"key":"catalog_腰_26","name":"融光種ボロスコイル","slot":"腰","series":"融光種ボロス","rarity":5},{"key":"catalog_脚_26","name":"融光種ボロスグリーヴ","slot":"脚","series":"融光種ボロス","rarity":5},{"key":"catalog_頭_27","name":"融光種ジュラヘルム","slot":"頭","series":"融光種ジュラ","rarity":6},{"key":"catalog_胴_27","name":"融光種ジュラメイル","slot":"胴","series":"融光種ジュラ","rarity":6},{"key":"catalog_腕_27","name":"融光種ジュラアーム","slot":"腕","series":"融光種ジュラ","rarity":6},{"key":"catalog_腰_27","name":"融光種ジュラコイル","slot":"腰","series":"融光種ジュラ","rarity":6},{"key":"catalog_脚_27","name":"融光種ジュラグリーヴ","slot":"脚","series":"融光種ジュラ","rarity":6},{"key":"catalog_頭_28","name":"レイアヘルム","slot":"頭","series":"レイア","rarity":6},{"key":"catalog_胴_28","name":"レイアメイル","slot":"胴","series":"レイア","rarity":6},{"key":"catalog_腕_28","name":"レイアアーム","slot":"腕","series":"レイア","rarity":6},{"key":"catalog_腰_28","name":"レイアコイル","slot":"腰","series":"レイア","rarity":6},{"key":"catalog_脚_28","name":"レイアグリーヴ","slot":"脚","series":"レイア","rarity":6},{"key":"catalog_頭_29","name":"レウスヘルム","slot":"頭","series":"レウス","rarity":6},{"key":"catalog_胴_29","name":"レウスメイル","slot":"胴","series":"レウス","rarity":6},{"key":"catalog_腕_29","name":"レウスアーム","slot":"腕","series":"レウス","rarity":6},{"key":"catalog_腰_29","name":"レウスコイル","slot":"腰","series":"レウス","rarity":6},{"key":"catalog_脚_29","name":"レウスグリーヴ","slot":"脚","series":"レウス","rarity":6},{"key":"catalog_頭_30","name":"融光種ギルオスヘルム","slot":"頭","series":"融光種ギルオス","rarity":7},{"key":"catalog_胴_30","name":"融光種ギルオスメイル","slot":"胴","series":"融光種ギルオス","rarity":7},{"key":"catalog_腕_30","name":"融光種ギルオスアーム","slot":"腕","series":"融光種ギルオス","rarity":7},{"key":"catalog_腰_30","name":"融光種ギルオスコイル","slot":"腰","series":"融光種ギルオス","rarity":7},{"key":"catalog_脚_30","name":"融光種ギルオスグリーヴ","slot":"脚","series":"融光種ギルオス","rarity":7},{"key":"catalog_頭_31","name":"融光種カガチヘルム","slot":"頭","series":"融光種カガチ","rarity":7},{"key":"catalog_胴_31","name":"融光種カガチメイル","slot":"胴","series":"融光種カガチ","rarity":7},{"key":"catalog_腕_31","name":"融光種カガチアーム","slot":"腕","series":"融光種カガチ","rarity":7},{"key":"catalog_腰_31","name":"融光種カガチコイル","slot":"腰","series":"融光種カガチ","rarity":7},{"key":"catalog_脚_31","name":"融光種カガチグリーヴ","slot":"脚","series":"融光種カガチ","rarity":7},{"key":"catalog_頭_32","name":"ディアブロヘルム","slot":"頭","series":"ディアブロ","rarity":7},{"key":"catalog_胴_32","name":"ディアブロメイル","slot":"胴","series":"ディアブロ","rarity":7},{"key":"catalog_腕_32","name":"ディアブロアーム","slot":"腕","series":"ディアブロ","rarity":7},{"key":"catalog_腰_32","name":"ディアブロコイル","slot":"腰","series":"ディアブロ","rarity":7},{"key":"catalog_脚_32","name":"ディアブログリーヴ","slot":"脚","series":"ディアブロ","rarity":7},{"key":"catalog_頭_33","name":"バルキンヘルム","slot":"頭","series":"バルキン","rarity":7},{"key":"catalog_胴_33","name":"バルキンメイル","slot":"胴","series":"バルキン","rarity":7},{"key":"catalog_腕_33","name":"バルキンアーム","slot":"腕","series":"バルキン","rarity":7},{"key":"catalog_腰_33","name":"バルキンコイル","slot":"腰","series":"バルキン","rarity":7},{"key":"catalog_脚_33","name":"バルキングリーヴ","slot":"脚","series":"バルキン","rarity":7},{"key":"catalog_頭_34","name":"ガロンヘルム","slot":"頭","series":"ガロン","rarity":7},{"key":"catalog_胴_34","name":"ガロンメイル","slot":"胴","series":"ガロン","rarity":7},{"key":"catalog_腕_34","name":"ガロンアーム","slot":"腕","series":"ガロン","rarity":7},{"key":"catalog_腰_34","name":"ガロンコイル","slot":"腰","series":"ガロン","rarity":7},{"key":"catalog_脚_34","name":"ガロングリーヴ","slot":"脚","series":"ガロン","rarity":7},{"key":"catalog_頭_35","name":"ツィツィヘルム","slot":"頭","series":"ツィツィ","rarity":8},{"key":"catalog_胴_35","name":"ツィツィメイル","slot":"胴","series":"ツィツィ","rarity":8},{"key":"catalog_腕_35","name":"ツィツィアーム","slot":"腕","series":"ツィツィ","rarity":8},{"key":"catalog_腰_35","name":"ツィツィコイル","slot":"腰","series":"ツィツィ","rarity":8},{"key":"catalog_脚_35","name":"ツィツィグリーヴ","slot":"脚","series":"ツィツィ","rarity":8},{"key":"catalog_頭_36","name":"ウルムーヘルム","slot":"頭","series":"ウルムー","rarity":8},{"key":"catalog_胴_36","name":"ウルムーメイル","slot":"胴","series":"ウルムー","rarity":8},{"key":"catalog_腕_36","name":"ウルムーアーム","slot":"腕","series":"ウルムー","rarity":8},{"key":"catalog_腰_36","name":"ウルムーコイル","slot":"腰","series":"ウルムー","rarity":8},{"key":"catalog_脚_36","name":"ウルムーグリーヴ","slot":"脚","series":"ウルムー","rarity":8},{"key":"catalog_頭_37","name":"ギエナヘルム","slot":"頭","series":"ギエナ","rarity":8},{"key":"catalog_胴_37","name":"ギエナメイル","slot":"胴","series":"ギエナ","rarity":8},{"key":"catalog_腕_37","name":"ギエナアーム","slot":"腕","series":"ギエナ","rarity":8},{"key":"catalog_腰_37","name":"ギエナコイル","slot":"腰","series":"ギエナ","rarity":8},{"key":"catalog_脚_37","name":"ギエナグリーヴ","slot":"脚","series":"ギエナ","rarity":8},{"key":"catalog_頭_38","name":"リオハートヘルム","slot":"頭","series":"リオハート","rarity":9},{"key":"catalog_胴_38","name":"リオハートメイル","slot":"胴","series":"リオハート","rarity":9},{"key":"catalog_腕_38","name":"リオハートアーム","slot":"腕","series":"リオハート","rarity":9},{"key":"catalog_腰_38","name":"リオハートコイル","slot":"腰","series":"リオハート","rarity":9},{"key":"catalog_脚_38","name":"リオハートグリーヴ","slot":"脚","series":"リオハート","rarity":9},{"key":"catalog_頭_39","name":"融光種ウルムーヘルム","slot":"頭","series":"融光種ウルムー","rarity":9},{"key":"catalog_胴_39","name":"融光種ウルムーメイル","slot":"胴","series":"融光種ウルムー","rarity":9},{"key":"catalog_腕_39","name":"融光種ウルムーアーム","slot":"腕","series":"融光種ウルムー","rarity":9},{"key":"catalog_腰_39","name":"融光種ウルムーコイル","slot":"腰","series":"融光種ウルムー","rarity":9},{"key":"catalog_脚_39","name":"融光種ウルムーグリーヴ","slot":"脚","series":"融光種ウルムー","rarity":9},{"key":"catalog_頭_40","name":"エアルダの誓約","slot":"頭","series":"エアルダ","rarity":9},{"key":"catalog_胴_40","name":"エアルダの誠実","slot":"胴","series":"エアルダ","rarity":9},{"key":"catalog_腕_40","name":"エアルダアーム","slot":"腕","series":"エアルダ","rarity":9},{"key":"catalog_腰_40","name":"エアルダコイル","slot":"腰","series":"エアルダ","rarity":9},{"key":"catalog_脚_40","name":"エアルダグリーヴ","slot":"脚","series":"エアルダ","rarity":9},{"key":"catalog_頭_41","name":"融光種ツィツィヘルム","slot":"頭","series":"融光種ツィツィ","rarity":10},{"key":"catalog_胴_41","name":"融光種ツィツィメイル","slot":"胴","series":"融光種ツィツィ","rarity":10},{"key":"catalog_腕_41","name":"融光種ツィツィアーム","slot":"腕","series":"融光種ツィツィ","rarity":10},{"key":"catalog_腰_41","name":"融光種ツィツィコイル","slot":"腰","series":"融光種ツィツィ","rarity":10},{"key":"catalog_脚_41","name":"融光種ツィツィグリーヴ","slot":"脚","series":"融光種ツィツィ","rarity":10},{"key":"catalog_頭_42","name":"融光種ガロンヘルム","slot":"頭","series":"融光種ガロン","rarity":10},{"key":"catalog_胴_42","name":"融光種ガロンメイル","slot":"胴","series":"融光種ガロン","rarity":10},{"key":"catalog_腕_42","name":"融光種ガロンアーム","slot":"腕","series":"融光種ガロン","rarity":10},{"key":"catalog_腰_42","name":"融光種ガロンコイル","slot":"腰","series":"融光種ガロン","rarity":10},{"key":"catalog_脚_42","name":"融光種ガロングリーヴ","slot":"脚","series":"融光種ガロン","rarity":10},{"key":"catalog_頭_43","name":"融光種レウスヘルム","slot":"頭","series":"融光種レウス","rarity":11},{"key":"catalog_胴_43","name":"融光種レウスメイル","slot":"胴","series":"融光種レウス","rarity":11},{"key":"catalog_腕_43","name":"融光種レウスアーム","slot":"腕","series":"融光種レウス","rarity":11},{"key":"catalog_腰_43","name":"融光種レウスコイル","slot":"腰","series":"融光種レウス","rarity":11},{"key":"catalog_脚_43","name":"融光種レウスグリーヴ","slot":"脚","series":"融光種レウス","rarity":11},{"key":"catalog_頭_44","name":"融光種ディアブロヘルム","slot":"頭","series":"融光種ディアブロ","rarity":11},{"key":"catalog_胴_44","name":"融光種ディアブロメイル","slot":"胴","series":"融光種ディアブロ","rarity":11},{"key":"catalog_腕_44","name":"融光種ディアブロアーム","slot":"腕","series":"融光種ディアブロ","rarity":11},{"key":"catalog_腰_44","name":"融光種ディアブロコイル","slot":"腰","series":"融光種ディアブロ","rarity":11},{"key":"catalog_脚_44","name":"融光種ディアブログリーヴ","slot":"脚","series":"融光種ディアブロ","rarity":11}];
+for (const item of catalogArmor) {
+  armorData[item.key] = {name:item.name, slot:item.slot, series:item.series, productionRarity:item.rarity, catalogOnly:true, url:'https://gamewith.jp/mhoutlanders/559874', materials:{}, skills:{}};
+}
+const $=id=>document.getElementById(id), armor=$('armor'), current=$('current'), target=$('target');
+for(const [id,a] of Object.entries(armorData)) { const suffix=a.catalogOnly?'・一覧登録／素材未登録':''; armor.add(new Option(`${a.name}（${a.slot}）${suffix}`,id)); }
+$('registered').textContent=`登録済みデータ ${Object.keys(armorData).length}件`; 
+const adventureRank=$('adventureRank');
+for(let rank=1;rank<=60;rank++) adventureRank.add(new Option('冒険ランク '+rank,rank));
+adventureRank.value='52';
+
+function maxRarityForRank(rank){
+  // GameWith confirms AR20-48 through R11. R12/R13 thresholds are provisional,
+  // based on in-game information supplied by the user (AR52 cap R12; AR54 unlocks R13).
+  const unlocks=[[20,4],[22,5],[27,6],[30,7],[35,8],[38,9],[45,10],[48,11],[52,12],[54,13]];
+  let cap=3;
+  for(const [requiredRank,rarity] of unlocks) if(rank>=requiredRank) cap=rarity;
+  return cap;
+}
+function refreshRarityOptions(preserve=true){
+  const cap=maxRarityForRank(+adventureRank.value);
+  const oldCurrent=+current.value||3, oldTarget=+target.value||cap;
+  current.innerHTML=''; target.innerHTML='';
+  for(let r=3;r<=cap;r++){
+    current.add(new Option('R'+r,r));
+    target.add(new Option('R'+r,r));
+  }
+  current.value=String(Math.min(preserve?oldCurrent:3,cap));
+  target.value=String(Math.max(+current.value,Math.min(preserve?oldTarget:cap,cap)));
+  $('rankCapText').textContent=`冒険ランク${adventureRank.value}での強化上限：R${cap}`;
+}
+refreshRarityOptions(false);
+function skillAt(a,rarity){
+  const out={};
+  for(const [unlock,skills] of Object.entries(a.skills)){
+    if(+unlock<=rarity) Object.assign(out,skills);
+  }
+  return out;
+}
+function render(){
+  const a=armorData[armor.value], from=+current.value, to=+target.value;
+  $('armorMeta').textContent=`部位：${a.slot} ／ シリーズ：${a.series}`;
+  const rankCap=maxRarityForRank(+adventureRank.value);
+  $('capNote').textContent=`冒険ランク${adventureRank.value}での強化上限はR${rankCap}。目標レアリティはこの上限まで選択できます。`;
+  $('sourceLink').innerHTML=`出典ページ：<a href="${a.url || 'https://gamewith.jp/mhoutlanders/559874'}" target="_blank" rel="noopener">GameWith「${a.name}」</a>`;
+  const missing=[];
+  if(to<from){
+    $('materials').innerHTML='<tr><td colspan="2" class="empty">目標は現在以上のレアリティを選択してください。</td></tr>';
+    $('materialNote').textContent='';$('stepCount').textContent='—';
+  }else{
+    const totals={};
+    for(let r=from+1;r<=to;r++){
+      const step=a.materials[r];
+      if(!step){missing.push('R'+r);continue;}
+      for(const [name,n] of Object.entries(step)) totals[name]=(totals[name]||0)+n;
+    }
+    if(missing.length){
+      $('materials').innerHTML=`<tr><td colspan="2" class="empty">必要素材データ未掲載：${missing.join('・')}。この範囲は計算を保留しています。</td></tr>`;
+      $('materialNote').textContent='GameWithの該当ページで未確認の段階があるため、推測値は表示していません。';
+      $('stepCount').textContent='データ不足';
+    }else{
+      const rows=Object.entries(totals);
+      $('materials').innerHTML=rows.length?rows.map(([n,v])=>`<tr><td>${n}</td><td>${v.toLocaleString('ja-JP')} 個</td></tr>`).join(''):'<tr><td colspan="2" class="empty">強化素材はありません（同じレアリティ）。</td></tr>';
+      $('materialNote').textContent=`現在R${from}からR${to}までの強化素材を合算しています。`;
+      $('stepCount').textContent=(to-from)+'段階分';
+    }
+  }
+  const skills=skillAt(a,to);
+  $('skills').innerHTML=Object.keys(skills).length?Object.entries(skills).map(([n,l])=>`<div class="skill"><span>${n}</span><strong>Lv.${l}</strong></div>`).join(''):'<div class="empty">このレアリティまでのスキル情報は未掲載です。</div>';
+  if(a.setSkill) $('skills').innerHTML += `<div class="skill"><span>セットスキル：${a.setSkill}</span></div>`;
+  if(a.catalogOnly){
+    $('dataNotice').textContent=`${a.name}は一覧に登録済みです。強化素材・スキルの個別データは未登録です。素材情報を確認後に追加します。`;
+  }else if(missing.length){
+    $('dataNotice').textContent=`${a.name}はGameWithページに${missing.join('・')}の強化素材が掲載されていません。未確認部分は計算せず、確認できた段階のみ対応しています。`;
+  }else{
+    $('dataNotice').textContent=`${a.name}の選択範囲は、GameWithに掲載された強化素材データで計算しています。R13の素材データは未登録です。ゲーム内表示と差がある場合はゲーム内を優先し、確認して修正します。`;
+  }
+}
+adventureRank.addEventListener('change',()=>{refreshRarityOptions(true);render();});
+armor.addEventListener('change',render);current.addEventListener('change',render);target.addEventListener('change',render);render();
+</script></body></html>
